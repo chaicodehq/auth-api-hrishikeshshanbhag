@@ -1,7 +1,7 @@
-import bcrypt from 'bcryptjs';
-import { User } from '../models/user.model.js';
-import { signToken } from '../utils/jwt.js';
-
+import bcrypt from "bcryptjs";
+import { User } from "../models/user.model.js";
+import { signToken } from "../utils/jwt.js";
+import jwt from "jsonwebtoken";
 /**
  * TODO: Register a new user
  *
@@ -13,7 +13,17 @@ import { signToken } from '../utils/jwt.js';
  */
 export async function register(req, res, next) {
   try {
-    // Your code here
+    const { name, email, password } = req.body;
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res
+        .status(409)
+        .json({ error: { message: "Email already exists" } });
+    }
+    const userObject = await User.create({ name, email, password });
+    const user = userObject.toObject();
+    delete user.password;
+    return res.status(201).json({ user });
   } catch (error) {
     next(error);
   }
@@ -32,7 +42,28 @@ export async function register(req, res, next) {
  */
 export async function login(req, res, next) {
   try {
-    // Your code here
+    const { email, password } = req.body;
+    const existingUser = await User.findOne({ email }).select("+password");
+    if (!existingUser)
+      return res
+        .status(401)
+        .json({ error: { message: "Invalid credentials" } });
+
+    const isMatch = await bcrypt.compare(password, existingUser.password);
+    if (!isMatch)
+      return res
+        .status(401)
+        .json({ error: { message: "Invalid credentials" } });
+
+    const token = signToken({
+      userId: existingUser._id,
+      email: existingUser.email,
+      role: existingUser.role,
+    });
+
+    const user = existingUser.toObject();
+    delete user.password;
+    return res.status(200).json({ token, user });
   } catch (error) {
     next(error);
   }
@@ -46,7 +77,7 @@ export async function login(req, res, next) {
  */
 export async function me(req, res, next) {
   try {
-    // Your code here
+    return res.status(200).json({ user: req.user });
   } catch (error) {
     next(error);
   }
